@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "/bin/bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+            ],
+            "timeoutMs": 15000,
+            "statusMessage": "加载 superpowers 技能约定"
+          }
+        ]
+      }
+    ]
+  }
+}

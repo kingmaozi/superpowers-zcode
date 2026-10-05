@@ -1,0 +1,79 @@
+name: ZCode hook check
+
+# The regression this packaging exists to prevent: the SessionStart hook must
+# not depend on the executable bit, and its stdout must stay valid JSON. Runs on
+# macOS because that is where /bin/bash is 3.2 and where ZCode Desktop installs.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hook:
+    name: SessionStart injection
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show system Bash version
+        run: /bin/bash --version | head -n 1
+
+      - name: Parse tracked shell scripts with system Bash
+        run: |
+          set -e
+          git ls-files '*.sh' | while IFS= read -r f; do
+            /bin/bash -n "$f"
+            echo "syntax OK: $f"
+          done
+
+      - name: Hook output is JSON even without the executable bit
+        run: |
+          set -e
+          chmod -x hooks/session-start.sh
+          test ! -x hooks/session-start.sh
+          /bin/bash hooks/session-start.sh > "$RUNNER_TEMP/hook.json"
+          python3 - "$RUNNER_TEMP/hook.json" <<'PY'
+          import json, sys
+          raw = open(sys.argv[1], "rb").read().decode("utf-8")
+          data = json.loads(raw)
+          allowed = {"additionalContext", "additional_context", "continue", "decision",
+                     "hookSpecificOutput", "reason", "stopReason", "suppressOutput", "systemMessage"}
+          extra = set(data) - allowed
+          assert not extra, "unexpected top-level keys: %s" % extra
+          context = data.get("additionalContext", "")
+          assert "EXTREMELY_IMPORTANT" in context, "missing priming block"
+          assert "using-superpowers" in context, "skill body not injected"
+          assert "superpowers:brainstorming" in context, "skill namespace missing"
+          print("hook output OK: %d chars of additionalContext" % len(context))
+          PY
+
+      - name: Hook is registered as a process hook
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json
+          hooks = json.load(open("hooks/hooks.json"))["hooks"]["SessionStart"][0]["hooks"][0]
+          assert hooks["type"] == "process", hooks["type"]
+          assert hooks["command"].startswith("/bin/bash"), hooks["command"]
+          assert any("session-start.sh" in a for a in hooks["args"]), hooks["args"]
+          print("hook registration OK:", hooks["command"], hooks["args"])
+          PY
+
+      - name: Manifest declares the shipped components
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, os
+          data = json.load(open(".zcode-plugin/plugin.json"))
+          assert data["name"] == "superpowers", data["name"]
+          for key in ("skills", "hooks"):
+              path = data[key].lstrip("./")
+              assert os.path.exists(path), "%s -> %s missing" % (key, path)
+          print("manifest OK:", data["name"], data["version"])
+          PY
