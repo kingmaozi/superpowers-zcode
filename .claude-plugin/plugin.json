@@ -1,6 +1,6 @@
 {
   "name": "superpowers",
-  "version": "6.4.2",
+  "version": "6.4.3",
   "description": "Core skills library for ZCode: brainstorming first, red/green TDD, systematic debugging, subagent-driven development and skill authoring. Upstream obra/superpowers (MIT), repackaged because the upstream SessionStart hook depends on an executable bit that a ZCode install does not carry.",
   "description_i18n": {
     "en": "Core skills library for ZCode: brainstorming first, red/green TDD, systematic debugging, subagent-driven development and skill authoring.",
